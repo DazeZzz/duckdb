@@ -5,6 +5,8 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parallel/priority_task_queue.hpp"
+#include "duckdb/parallel/resource_group.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
@@ -216,16 +218,17 @@ private:
 };
 #endif
 
-ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token)
-    : scheduler(scheduler), token(std::move(token)) {
+ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token,
+                             shared_ptr<ResourceGroup> resource_group)
+    : scheduler(scheduler), token(std::move(token)), resource_group(std::move(resource_group)) {
 }
 
 ProducerToken::~ProducerToken() {
 }
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
-    : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold),
+    : db(db), queue(make_uniq<ConcurrentQueue>()), priority_queue(make_uniq<PriorityTaskQueue>()),
+      use_priority_scheduling(false), allocator_flush_threshold(db.config.options.allocator_flush_threshold),
       allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
       current_thread_count(1) {
 	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
@@ -250,17 +253,43 @@ TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
 }
 
 unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
+	// Default priority is 10000
+	return CreateProducer(10000);
+}
+
+unique_ptr<ProducerToken> TaskScheduler::CreateProducer(idx_t priority) {
 	auto token = make_uniq<QueueProducerToken>(*queue);
-	return make_uniq<ProducerToken>(*this, std::move(token));
+	auto resource_group = make_shared_ptr<ResourceGroup>(priority);
+
+	// Register the resource group with the priority queue
+	if (use_priority_scheduling) {
+		priority_queue->RegisterResourceGroup(resource_group);
+	}
+
+	return make_uniq<ProducerToken>(*this, std::move(token), std::move(resource_group));
 }
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
-	queue->Enqueue(token, std::move(task));
+	if (use_priority_scheduling && token.resource_group) {
+		// Use priority scheduling
+		priority_queue->EnqueueTask(token.resource_group, task);
+	} else {
+		// Use legacy FIFO queue
+		queue->Enqueue(token, std::move(task));
+	}
 }
 
 void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks) {
-	queue->EnqueueBulk(producer, tasks);
+	if (use_priority_scheduling && producer.resource_group) {
+		// Use priority scheduling
+		for (auto &task : tasks) {
+			priority_queue->EnqueueTask(producer.resource_group, task);
+		}
+	} else {
+		// Use legacy FIFO queue
+		queue->EnqueueBulk(producer, tasks);
+	}
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
@@ -275,33 +304,64 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	const auto &config = DBConfig::GetConfig(db);
 
 	shared_ptr<Task> task;
+	shared_ptr<ResourceGroup> resource_group;
+
 	// loop until the marker is set to false
 	while (*marker) {
-		if (!block_allocator.SupportsFlush()) {
-			// allocator can't flush, just start an untimed wait
-			queue->semaphore.wait();
-		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
-			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
-			block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
-			                            NumericCast<idx_t>(requested_thread_count.load()));
-			auto decay_delay = Allocator::DecayDelay();
-			if (!decay_delay.IsValid()) {
-				// no decay delay specified - just wait
+		bool got_task = false;
+
+		if (use_priority_scheduling) {
+			// Use priority-based scheduling
+			got_task = priority_queue->DequeueTask(task, resource_group);
+			if (!got_task) {
+				// No tasks available, yield and continue
+				YieldThread();
+				continue;
+			}
+		} else {
+			// Use legacy FIFO scheduling with semaphore
+			if (!block_allocator.SupportsFlush()) {
+				// allocator can't flush, just start an untimed wait
 				queue->semaphore.wait();
-			} else {
-				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
-				                           INITIAL_FLUSH_WAIT)) {
-					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-					// mark it as idle and start an untimed wait
-					Allocator::ThreadIdle();
+			} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
+				// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
+				block_allocator.ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+				                            NumericCast<idx_t>(requested_thread_count.load()));
+				auto decay_delay = Allocator::DecayDelay();
+				if (!decay_delay.IsValid()) {
+					// no decay delay specified - just wait
 					queue->semaphore.wait();
+				} else {
+					if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+					                           INITIAL_FLUSH_WAIT)) {
+						// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+						// mark it as idle and start an untimed wait
+						Allocator::ThreadIdle();
+						queue->semaphore.wait();
+					}
 				}
 			}
+			got_task = queue->Dequeue(task);
 		}
-		if (queue->Dequeue(task)) {
+
+		if (got_task) {
 			auto process_mode = config.options.scheduler_process_partial ? TaskExecutionMode::PROCESS_PARTIAL
 			                                                             : TaskExecutionMode::PROCESS_ALL;
+
+			// Record start time for stride scheduling
+			auto start_time = std::chrono::high_resolution_clock::now();
+
 			auto execute_result = task->Execute(process_mode);
+
+			// Calculate execution time and update pass value
+			if (use_priority_scheduling && resource_group) {
+				auto end_time = std::chrono::high_resolution_clock::now();
+				auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+				double execution_time_ms = duration.count() / 1000.0;
+				// Normalize to target duration (2ms)
+				double normalized_time = execution_time_ms / 2.0;
+				resource_group->UpdatePass(normalized_time);
+			}
 
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
@@ -310,8 +370,12 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				break;
 			case TaskExecutionResult::TASK_NOT_FINISHED: {
 				// task is not finished - reschedule immediately
-				auto &token = *task->token;
-				queue->Enqueue(token, std::move(task));
+				if (use_priority_scheduling && resource_group) {
+					priority_queue->EnqueueTask(resource_group, task);
+				} else {
+					auto &token = *task->token;
+					queue->Enqueue(token, std::move(task));
+				}
 				break;
 			}
 			case TaskExecutionResult::TASK_BLOCKED:
@@ -319,7 +383,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
-		} else if (queue->GetTasksInQueue() > 0) {
+		} else if (!use_priority_scheduling && queue->GetTasksInQueue() > 0) {
 			// failed to dequeue but there are still tasks remaining - signal again to retry
 			queue->semaphore.signal(1);
 		}

@@ -21,16 +21,20 @@ struct QueueProducerToken;
 class ClientContext;
 class DatabaseInstance;
 class TaskScheduler;
+class ResourceGroup;
+class PriorityTaskQueue;
 
 struct SchedulerThread;
 
 struct ProducerToken {
-	ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token);
+	ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token, shared_ptr<ResourceGroup> resource_group);
 	~ProducerToken();
 
 	TaskScheduler &scheduler;
 	unique_ptr<QueueProducerToken> token;
 	mutex producer_lock;
+	//! The resource group (query) associated with this producer
+	shared_ptr<ResourceGroup> resource_group;
 };
 
 //! The TaskScheduler is responsible for managing tasks and threads
@@ -45,7 +49,10 @@ public:
 	DUCKDB_API static TaskScheduler &GetScheduler(ClientContext &context);
 	DUCKDB_API static TaskScheduler &GetScheduler(DatabaseInstance &db);
 
+	//! Create a producer token with a default priority
 	unique_ptr<ProducerToken> CreateProducer();
+	//! Create a producer token with a specific priority
+	unique_ptr<ProducerToken> CreateProducer(idx_t priority);
 	//! Schedule a task to be executed by the task scheduler
 	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task);
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
@@ -94,8 +101,12 @@ private:
 
 private:
 	DatabaseInstance &db;
-	//! The task queue
+	//! The task queue (legacy FIFO queue)
 	unique_ptr<ConcurrentQueue> queue;
+	//! The priority task queue (new stride-based scheduler)
+	unique_ptr<PriorityTaskQueue> priority_queue;
+	//! Whether to use priority scheduling (default: false for backward compatibility)
+	bool use_priority_scheduling;
 	//! Lock for modifying the thread count
 	mutex thread_lock;
 	//! The active background threads of the task scheduler

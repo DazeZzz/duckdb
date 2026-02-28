@@ -15,6 +15,8 @@ add_library_unity(
   pipeline_finish_event.cpp
   pipeline_initialize_event.cpp
   pipeline_prepare_finish_event.cpp
+  priority_task_queue.cpp
+  resource_group.cpp
   task_executor.cpp
   task_notifier.cpp
   task_scheduler.cpp

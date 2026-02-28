@@ -1,0 +1,39 @@
+# name: test/sql/parallelism/test_priority_scheduling.test
+# description: Test priority scheduling with ResourceGroup
+# group: [parallelism]
+
+# Test basic query execution with default priority
+statement ok
+CREATE TABLE test_table (id INTEGER, value INTEGER);
+
+statement ok
+INSERT INTO test_table SELECT range, range * 2 FROM range(1000);
+
+query I
+SELECT COUNT(*) FROM test_table;
+----
+1000
+
+query I
+SELECT SUM(value) FROM test_table;
+----
+999000
+
+# Test concurrent queries
+statement ok
+CREATE TABLE test_table2 (id INTEGER, value INTEGER);
+
+statement ok
+INSERT INTO test_table2 SELECT range, range * 3 FROM range(1000);
+
+query I
+SELECT COUNT(*) FROM test_table JOIN test_table2 ON test_table.id = test_table2.id;
+----
+1000
+
+# Cleanup
+statement ok
+DROP TABLE test_table;
+
+statement ok
+DROP TABLE test_table2;
