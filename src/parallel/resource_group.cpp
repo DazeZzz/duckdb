@@ -6,7 +6,7 @@ namespace duckdb {
 
 ResourceGroup::ResourceGroup(idx_t initial_priority)
     : priority(initial_priority), stride(1.0 / static_cast<double>(initial_priority)), pass(0.0),
-      total_executed_tasks(0), total_execution_time(0.0) {
+      current_phase(TaskPhase::ELASTIC), total_executed_tasks(0), total_execution_time(0.0) {
 	if (initial_priority == 0) {
 		throw InternalException("ResourceGroup priority cannot be zero");
 	}

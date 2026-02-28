@@ -208,3 +208,77 @@ TEST_CASE("Test ResourceGroup statistics", "[parallel][resource_group]") {
 	REQUIRE(rg->GetTotalExecutedTasks() == 3);
 	REQUIRE(rg->GetTotalExecutionTime() == Approx(3.5));
 }
+
+TEST_CASE("Test phase-aware scheduling (Inelastic-First)", "[parallel][priority_task_queue][phase_aware]") {
+	PriorityTaskQueue queue;
+
+	// Create two resource groups with same priority but different phases
+	auto rg_elastic = make_shared_ptr<ResourceGroup>(10000);
+	auto rg_inelastic = make_shared_ptr<ResourceGroup>(10000);
+
+	// Set phases
+	rg_elastic->SetPhase(TaskPhase::ELASTIC);
+	rg_inelastic->SetPhase(TaskPhase::INELASTIC);
+
+	queue.RegisterResourceGroup(rg_elastic);
+	queue.RegisterResourceGroup(rg_inelastic);
+
+	// Add tasks to both groups
+	queue.EnqueueTask(rg_elastic, make_shared_ptr<TestTask>(1));
+	queue.EnqueueTask(rg_inelastic, make_shared_ptr<TestTask>(2));
+
+	shared_ptr<Task> task;
+	shared_ptr<ResourceGroup> selected_rg;
+
+	// First task should be from inelastic group (Inelastic-First strategy)
+	REQUIRE(queue.DequeueTask(task, selected_rg));
+	REQUIRE(selected_rg == rg_inelastic);
+	REQUIRE(dynamic_cast<TestTask *>(task.get())->task_id == 2);
+
+	// Update pass value
+	selected_rg->UpdatePass(1.0);
+
+	// Second task should be from elastic group (no more inelastic tasks)
+	REQUIRE(queue.DequeueTask(task, selected_rg));
+	REQUIRE(selected_rg == rg_elastic);
+	REQUIRE(dynamic_cast<TestTask *>(task.get())->task_id == 1);
+}
+
+TEST_CASE("Test phase-aware scheduling with multiple inelastic tasks", "[parallel][priority_task_queue][phase_aware]") {
+	PriorityTaskQueue queue;
+
+	// Create three resource groups
+	auto rg1 = make_shared_ptr<ResourceGroup>(10000); // High priority, elastic
+	auto rg2 = make_shared_ptr<ResourceGroup>(5000);  // Low priority, inelastic
+	auto rg3 = make_shared_ptr<ResourceGroup>(2500);  // Very low priority, inelastic
+
+	rg1->SetPhase(TaskPhase::ELASTIC);
+	rg2->SetPhase(TaskPhase::INELASTIC);
+	rg3->SetPhase(TaskPhase::INELASTIC);
+
+	queue.RegisterResourceGroup(rg1);
+	queue.RegisterResourceGroup(rg2);
+	queue.RegisterResourceGroup(rg3);
+
+	// Add tasks
+	queue.EnqueueTask(rg1, make_shared_ptr<TestTask>(1));
+	queue.EnqueueTask(rg2, make_shared_ptr<TestTask>(2));
+	queue.EnqueueTask(rg3, make_shared_ptr<TestTask>(3));
+
+	shared_ptr<Task> task;
+	shared_ptr<ResourceGroup> selected_rg;
+
+	// First task should be from rg2 (inelastic, higher priority than rg3)
+	REQUIRE(queue.DequeueTask(task, selected_rg));
+	REQUIRE(selected_rg == rg2);
+	selected_rg->UpdatePass(1.0);
+
+	// Second task should be from rg3 (inelastic, even though rg1 has higher priority)
+	REQUIRE(queue.DequeueTask(task, selected_rg));
+	REQUIRE(selected_rg == rg3);
+	selected_rg->UpdatePass(1.0);
+
+	// Third task should be from rg1 (elastic, no more inelastic tasks)
+	REQUIRE(queue.DequeueTask(task, selected_rg));
+	REQUIRE(selected_rg == rg1);
+}

@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/task_phase.hpp"
 
 namespace duckdb {
 
@@ -64,6 +65,16 @@ public:
 		return total_execution_time.load();
 	}
 
+	//! Get the current phase of this resource group
+	TaskPhase GetPhase() const {
+		return current_phase.load();
+	}
+
+	//! Set the current phase of this resource group
+	void SetPhase(TaskPhase phase) {
+		current_phase = phase;
+	}
+
 private:
 	//! Priority of this resource group (higher = more important)
 	atomic<idx_t> priority;
@@ -77,6 +88,9 @@ private:
 	//! Queue of tasks for this resource group
 	mutable mutex task_queue_lock;
 	std::queue<shared_ptr<Task>> task_queue;
+
+	//! Current execution phase (elastic or inelastic)
+	atomic<TaskPhase> current_phase;
 
 	//! Statistics
 	atomic<idx_t> total_executed_tasks;

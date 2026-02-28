@@ -29,23 +29,44 @@ void PriorityTaskQueue::EnqueueTask(shared_ptr<ResourceGroup> resource_group, sh
 }
 
 shared_ptr<ResourceGroup> PriorityTaskQueue::SelectResourceGroup() {
-	// Select the resource group with the minimum pass value
-	// This implements the stride scheduling algorithm
-	shared_ptr<ResourceGroup> selected_group;
-	double min_pass = std::numeric_limits<double>::max();
+	// Implement Inelastic-First (IF) strategy from Berg et al.
+	// Priority 1: Select inelastic tasks first (non-parallelizable work)
+	// Priority 2: Among same phase, select by minimum pass value (stride scheduling)
 
+	shared_ptr<ResourceGroup> selected_inelastic;
+	shared_ptr<ResourceGroup> selected_elastic;
+	double min_pass_inelastic = std::numeric_limits<double>::max();
+	double min_pass_elastic = std::numeric_limits<double>::max();
+
+	// First pass: separate inelastic and elastic groups, find minimum pass in each
 	for (auto &group : resource_groups) {
 		if (!group->HasTasks()) {
 			continue;
 		}
+
 		double pass = group->GetPass();
-		if (pass < min_pass) {
-			min_pass = pass;
-			selected_group = group;
+		TaskPhase phase = group->GetPhase();
+
+		if (phase == TaskPhase::INELASTIC) {
+			if (pass < min_pass_inelastic) {
+				min_pass_inelastic = pass;
+				selected_inelastic = group;
+			}
+		} else { // ELASTIC
+			if (pass < min_pass_elastic) {
+				min_pass_elastic = pass;
+				selected_elastic = group;
+			}
 		}
 	}
 
-	return selected_group;
+	// Inelastic-First: prioritize inelastic tasks
+	if (selected_inelastic) {
+		return selected_inelastic;
+	}
+
+	// If no inelastic tasks, return elastic task
+	return selected_elastic;
 }
 
 bool PriorityTaskQueue::DequeueTask(shared_ptr<Task> &task, shared_ptr<ResourceGroup> &resource_group) {
