@@ -31,6 +31,7 @@ set(TEST_API_OBJECTS
     test_pending_with_parameters.cpp
     test_progress_bar.cpp
     test_priority_scheduling.cpp
+    test_phase_aware_benchmark.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp
