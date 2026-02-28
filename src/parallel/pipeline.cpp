@@ -14,6 +14,8 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include <chrono>
+
 namespace duckdb {
 
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
@@ -38,7 +40,28 @@ TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 	pipeline_executor->SetTaskForInterrupts(shared_from_this());
 
 	if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-		auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
+		// Use dynamic morsel size based on execution state
+		auto morsel_size = pipeline.GetCurrentMorselSize();
+
+		// Track execution time for throughput estimation
+		auto start_time = std::chrono::high_resolution_clock::now();
+		auto res = pipeline_executor->Execute(morsel_size);
+		auto end_time = std::chrono::high_resolution_clock::now();
+
+		// Calculate execution time in seconds
+		std::chrono::duration<double> execution_duration = end_time - start_time;
+		double execution_time = execution_duration.count();
+
+		// Update pipeline statistics
+		pipeline.IncrementChunksProcessed(morsel_size);
+		pipeline.UpdateThroughput(morsel_size, execution_time);
+
+		// Update execution state based on progress
+		ProgressData progress;
+		if (pipeline.GetProgress(progress)) {
+			double progress_ratio = progress.done / progress.total;
+			pipeline.UpdateExecutionState(progress_ratio);
+		}
 
 		switch (res) {
 		case PipelineExecuteResult::NOT_FINISHED:
@@ -67,6 +90,9 @@ TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 
 Pipeline::Pipeline(Executor &executor_p)
     : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr) {
+	execution_state = ExecutionState::STARTUP;
+	total_chunks_processed = 0;
+	throughput_ema = 0.0;
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -90,6 +116,63 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 	progress.Normalize(double(source_cardinality));
 	progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
 	return progress.IsValid();
+}
+
+ExecutionState Pipeline::GetExecutionState() const {
+	return execution_state.load();
+}
+
+idx_t Pipeline::GetCurrentMorselSize() const {
+	auto state = execution_state.load();
+	switch (state) {
+	case ExecutionState::STARTUP:
+		return AdaptiveMorselConfig::STARTUP_MORSEL_SIZE;
+	case ExecutionState::DEFAULT:
+		return AdaptiveMorselConfig::DEFAULT_MORSEL_SIZE;
+	case ExecutionState::SHUTDOWN:
+		return AdaptiveMorselConfig::SHUTDOWN_MORSEL_SIZE;
+	default:
+		return AdaptiveMorselConfig::DEFAULT_MORSEL_SIZE;
+	}
+}
+
+void Pipeline::UpdateExecutionState(double progress) {
+	auto current_state = execution_state.load();
+	auto chunks_processed = total_chunks_processed.load();
+
+	// Transition from Startup to Default
+	if (current_state == ExecutionState::STARTUP &&
+	    chunks_processed >= AdaptiveMorselConfig::STARTUP_THRESHOLD) {
+		execution_state = ExecutionState::DEFAULT;
+	}
+	// Transition from Default to Shutdown
+	else if (current_state == ExecutionState::DEFAULT &&
+	         progress >= AdaptiveMorselConfig::SHUTDOWN_THRESHOLD) {
+		execution_state = ExecutionState::SHUTDOWN;
+	}
+}
+
+void Pipeline::UpdateThroughput(idx_t chunks_processed, double execution_time) {
+	if (execution_time <= 0.0) {
+		return;
+	}
+
+	double current_throughput = static_cast<double>(chunks_processed) / execution_time;
+	double prev_ema = throughput_ema.load();
+
+	if (prev_ema == 0.0) {
+		// First measurement
+		throughput_ema = current_throughput;
+	} else {
+		// Exponential moving average: EMA = alpha * current + (1 - alpha) * previous
+		double new_ema = AdaptiveMorselConfig::EMA_ALPHA * current_throughput +
+		                 (1.0 - AdaptiveMorselConfig::EMA_ALPHA) * prev_ema;
+		throughput_ema = new_ema;
+	}
+}
+
+void Pipeline::IncrementChunksProcessed(idx_t chunks) {
+	total_chunks_processed.fetch_add(chunks);
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {

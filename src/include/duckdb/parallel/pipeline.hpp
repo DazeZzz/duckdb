@@ -16,6 +16,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parallel/executor_task.hpp"
+#include "duckdb/parallel/execution_state.hpp"
 
 namespace duckdb {
 
@@ -124,6 +125,18 @@ public:
 	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
 
+	//! Adaptive morsel execution methods
+	//! Get the current execution state
+	ExecutionState GetExecutionState() const;
+	//! Get the current morsel size based on execution state
+	idx_t GetCurrentMorselSize() const;
+	//! Update execution state based on progress
+	void UpdateExecutionState(double progress);
+	//! Update throughput estimation with exponential moving average
+	void UpdateThroughput(idx_t chunks_processed, double execution_time);
+	//! Increment total chunks processed
+	void IncrementChunksProcessed(idx_t chunks);
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
@@ -153,6 +166,14 @@ private:
 	//! The reason is that when we start a new pipeline we insert the current minimum batch index as a placeholder
 	//! Which leads to duplicate entries in the set of active batch indexes
 	multiset<idx_t> batch_indexes;
+
+	//! Adaptive morsel execution state
+	//! Current execution state (Startup/Default/Shutdown)
+	atomic<ExecutionState> execution_state;
+	//! Total chunks processed by this pipeline
+	atomic<idx_t> total_chunks_processed;
+	//! Throughput estimation using exponential moving average (chunks per second)
+	atomic<double> throughput_ema;
 
 private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
