@@ -45,6 +45,18 @@ public:
 		return GetTaskCount() > 0;
 	}
 
+	//! Adaptive priorities (Phase 3)
+	//! Enable or disable adaptive priorities for all resource groups
+	void SetAdaptivePriorities(bool enabled);
+
+	//! Update global average throughput and adapt priorities
+	void UpdateAdaptivePriorities();
+
+	//! Get the global average throughput
+	double GetAverageThroughput() const {
+		return average_throughput.load();
+	}
+
 private:
 	//! Select the resource group with the minimum pass value
 	shared_ptr<ResourceGroup> SelectResourceGroup();
@@ -54,6 +66,10 @@ private:
 
 	//! List of active resource groups (queries)
 	vector<shared_ptr<ResourceGroup>> resource_groups;
+
+	//! Adaptive priorities (Phase 3)
+	//! Global average throughput across all resource groups
+	atomic<double> average_throughput{0.0};
 };
 
 } // namespace duckdb

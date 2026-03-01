@@ -91,4 +91,46 @@ idx_t PriorityTaskQueue::GetTaskCount() const {
 	return total;
 }
 
+// Adaptive priorities implementation (Phase 3)
+
+void PriorityTaskQueue::SetAdaptivePriorities(bool enabled) {
+	lock_guard<mutex> guard(queue_lock);
+	for (auto &group : resource_groups) {
+		group->SetAdaptivePriorities(enabled);
+	}
+}
+
+void PriorityTaskQueue::UpdateAdaptivePriorities() {
+	lock_guard<mutex> guard(queue_lock);
+
+	if (resource_groups.empty()) {
+		return;
+	}
+
+	// Calculate global average throughput
+	double total_throughput = 0.0;
+	idx_t active_groups = 0;
+
+	for (auto &group : resource_groups) {
+		double throughput = group->GetThroughput();
+		if (throughput > 0.0) {
+			total_throughput += throughput;
+			active_groups++;
+		}
+	}
+
+	if (active_groups == 0) {
+		// No throughput data yet
+		return;
+	}
+
+	double avg_throughput = total_throughput / static_cast<double>(active_groups);
+	average_throughput = avg_throughput;
+
+	// Adapt priorities for all resource groups
+	for (auto &group : resource_groups) {
+		group->AdaptPriority(avg_throughput);
+	}
+}
+
 } // namespace duckdb

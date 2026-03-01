@@ -75,6 +75,33 @@ public:
 		current_phase = phase;
 	}
 
+	//! Adaptive priority methods (Phase 3)
+	//! Get the base priority (original priority before adaptation)
+	idx_t GetBasePriority() const {
+		return base_priority.load();
+	}
+
+	//! Get the current throughput (tasks per second)
+	double GetThroughput() const {
+		return throughput.load();
+	}
+
+	//! Update throughput estimation with exponential moving average
+	void UpdateThroughput(idx_t tasks_executed, double execution_time);
+
+	//! Adjust priority based on throughput relative to average
+	//! avg_throughput: global average throughput across all resource groups
+	void AdaptPriority(double avg_throughput);
+
+	//! Enable or disable adaptive priorities
+	void SetAdaptivePriorities(bool enabled) {
+		adaptive_priorities_enabled = enabled;
+	}
+
+	bool IsAdaptivePrioritiesEnabled() const {
+		return adaptive_priorities_enabled.load();
+	}
+
 private:
 	//! Priority of this resource group (higher = more important)
 	atomic<idx_t> priority;
@@ -95,6 +122,14 @@ private:
 	//! Statistics
 	atomic<idx_t> total_executed_tasks;
 	atomic<double> total_execution_time;
+
+	//! Adaptive priorities (Phase 3)
+	//! Base priority (original priority before adaptation)
+	atomic<idx_t> base_priority;
+	//! Current throughput (tasks per second)
+	atomic<double> throughput;
+	//! Whether adaptive priorities are enabled
+	atomic<bool> adaptive_priorities_enabled;
 };
 
 } // namespace duckdb
