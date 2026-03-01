@@ -34,6 +34,7 @@ set(TEST_API_OBJECTS
     test_phase_aware_benchmark.cpp
     test_adaptive_morsel.cpp
     test_adaptive_priorities.cpp
+    test_lock_free_scheduler.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp
