@@ -31,7 +31,7 @@ struct TaskMetrics {
 };
 
 //! Performance metrics for a query execution
-struct QueryMetrics {
+struct PerformanceQueryMetrics {
 	idx_t query_id;
 	double response_time_ms;
 	idx_t total_tasks;
@@ -106,8 +106,8 @@ private:
 
 	//! Query metrics
 	mutable mutex query_metrics_lock;
-	vector<QueryMetrics> query_metrics;
-	unordered_map<idx_t, QueryMetrics> pending_queries; // query_id -> metrics
+	vector<PerformanceQueryMetrics> query_metrics;
+	unordered_map<idx_t, PerformanceQueryMetrics> pending_queries; // query_id -> metrics
 
 	//! Scheduling decisions
 	mutable mutex scheduling_decisions_lock;
