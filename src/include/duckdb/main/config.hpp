@@ -231,6 +231,8 @@ struct DBConfigOptions {
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! Whether to enable phase-aware scheduling (experimental)
+	bool enable_phase_aware_scheduling = true;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

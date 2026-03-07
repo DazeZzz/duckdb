@@ -228,7 +228,7 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()), priority_queue(make_uniq<PriorityTaskQueue>()),
-      use_priority_scheduling(false), allocator_flush_threshold(db.config.options.allocator_flush_threshold),
+      use_priority_scheduling(db.config.options.enable_phase_aware_scheduling), allocator_flush_threshold(db.config.options.allocator_flush_threshold),
       allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
       current_thread_count(1) {
 	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
