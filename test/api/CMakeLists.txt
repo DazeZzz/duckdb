@@ -38,6 +38,7 @@ set(TEST_API_OBJECTS
     test_self_tuning.cpp
     test_benchmark_phase0.cpp
     test_phase_classifier.cpp
+    test_performance_logger.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp

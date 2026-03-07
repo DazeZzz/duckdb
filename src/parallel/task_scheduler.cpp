@@ -7,6 +7,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/priority_task_queue.hpp"
 #include "duckdb/parallel/resource_group.hpp"
+#include "duckdb/parallel/performance_logger.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
@@ -230,7 +231,7 @@ TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()), priority_queue(make_uniq<PriorityTaskQueue>()),
       use_priority_scheduling(db.config.options.enable_phase_aware_scheduling), allocator_flush_threshold(db.config.options.allocator_flush_threshold),
       allocator_background_threads(db.config.options.allocator_background_threads), requested_thread_count(0),
-      current_thread_count(1) {
+      current_thread_count(1), performance_logger(make_uniq<PerformanceLogger>()) {
 	SetAllocatorBackgroundThreads(db.config.options.allocator_background_threads);
 }
 
@@ -519,6 +520,10 @@ void TaskScheduler::YieldThread() {
 #ifndef DUCKDB_NO_THREADS
 	std::this_thread::yield();
 #endif
+}
+
+PerformanceLogger &TaskScheduler::GetPerformanceLogger() {
+	return *performance_logger;
 }
 
 idx_t TaskScheduler::GetEstimatedCPUId() {

@@ -20,6 +20,7 @@ add_library_unity(
   resource_group.cpp
   self_tuning_config.cpp
   phase_classifier.cpp
+  performance_logger.cpp
   benchmark_framework.cpp
   task_executor.cpp
   task_notifier.cpp
