@@ -12,6 +12,8 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/phase_classifier.hpp"
+#include "duckdb/parallel/resource_group.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include <chrono>
@@ -253,6 +255,15 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
 	Reset();
+
+	// Phase-aware scheduling: classify this pipeline and set the phase on the resource group
+	// This enables the Inelastic-First (IF) scheduling strategy
+	TaskPhase pipeline_phase = PhaseClassifier::ClassifyPipeline(*this);
+	auto &token = executor.GetToken();
+	if (token.resource_group) {
+		token.resource_group->SetPhase(pipeline_phase);
+	}
+
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
 		ScheduleSequentialTask(event);

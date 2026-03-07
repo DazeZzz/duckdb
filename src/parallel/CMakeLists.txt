@@ -19,6 +19,7 @@ add_library_unity(
   lock_free_priority_task_queue.cpp
   resource_group.cpp
   self_tuning_config.cpp
+  phase_classifier.cpp
   benchmark_framework.cpp
   task_executor.cpp
   task_notifier.cpp
