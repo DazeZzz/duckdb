@@ -20,7 +20,7 @@
 namespace duckdb {
 
 // Performance metrics for a single query execution
-struct QueryMetrics {
+struct BenchmarkQueryMetrics {
 	string query_name;
 	uint64_t response_time_ms;           // Total execution time
 	uint64_t scheduling_overhead_us;     // Time spent in scheduling
@@ -34,7 +34,7 @@ struct QueryMetrics {
 	vector<uint64_t> scheduling_events;  // Timestamps of scheduling decisions
 
 	// Constructor
-	QueryMetrics() : response_time_ms(0), scheduling_overhead_us(0),
+	BenchmarkQueryMetrics() : response_time_ms(0), scheduling_overhead_us(0),
 	                 task_count(0), morsel_count(0), throughput(0.0),
 	                 parallel_efficiency(0.0) {}
 };
@@ -89,10 +89,10 @@ public:
 	~BenchmarkFramework();
 
 	// Run a single query and collect metrics
-	QueryMetrics RunQuery(const TPCHQuery &query);
+	BenchmarkQueryMetrics RunQuery(const TPCHQuery &query);
 
 	// Run multiple queries concurrently (workload mix)
-	vector<QueryMetrics> RunWorkload(const vector<TPCHQuery> &queries);
+	vector<BenchmarkQueryMetrics> RunWorkload(const vector<TPCHQuery> &queries);
 
 	// Run experiment multiple times and aggregate results
 	AggregatedMetrics RunExperiment(const string &name, const vector<TPCHQuery> &queries, idx_t num_runs);
@@ -101,7 +101,7 @@ public:
 	void ExportToCSV(const string &filename, const vector<AggregatedMetrics> &results);
 
 	// Export detailed logs to JSON
-	void ExportDetailedLogs(const string &filename, const vector<QueryMetrics> &metrics);
+	void ExportDetailedLogs(const string &filename, const vector<BenchmarkQueryMetrics> &metrics);
 
 	// Get predefined TPC-H query mix
 	static vector<TPCHQuery> GetTPCHMix();

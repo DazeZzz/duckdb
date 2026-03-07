@@ -6,7 +6,7 @@ using duckdb::BenchmarkFramework;
 using duckdb::TPCHQuery;
 using duckdb::TaskPhase;
 using duckdb::AggregatedMetrics;
-using duckdb::QueryMetrics;
+using duckdb::BenchmarkQueryMetrics;
 using duckdb::vector;
 
 TEST_CASE("Test benchmark framework - Phase 0 baseline", "[benchmark][phase0]") {
@@ -102,7 +102,7 @@ TEST_CASE("Test benchmark framework - Phase 0 baseline", "[benchmark][phase0]") 
 		TPCHQuery q1("Q1", TaskPhase::ELASTIC, 100, 8, 80, 50000);
 		auto metrics = benchmark.RunQuery(q1);
 
-		vector<QueryMetrics> all_metrics;
+		vector<BenchmarkQueryMetrics> all_metrics;
 		all_metrics.push_back(metrics);
 
 		// Export detailed logs

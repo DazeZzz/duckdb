@@ -36,6 +36,7 @@ set(TEST_API_OBJECTS
     test_adaptive_priorities.cpp
     test_lock_free_scheduler.cpp
     test_self_tuning.cpp
+    test_benchmark_phase0.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
     test_bignum.cpp

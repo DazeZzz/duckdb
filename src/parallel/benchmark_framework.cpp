@@ -16,8 +16,8 @@ BenchmarkFramework::BenchmarkFramework(idx_t num_threads) : num_threads_(num_thr
 BenchmarkFramework::~BenchmarkFramework() {
 }
 
-QueryMetrics BenchmarkFramework::RunQuery(const TPCHQuery &query) {
-	QueryMetrics metrics;
+BenchmarkQueryMetrics BenchmarkFramework::RunQuery(const TPCHQuery &query) {
+	BenchmarkQueryMetrics metrics;
 	metrics.query_name = query.name;
 
 	auto start_time = std::chrono::high_resolution_clock::now();
@@ -58,8 +58,13 @@ QueryMetrics BenchmarkFramework::RunQuery(const TPCHQuery &query) {
 	metrics.scheduling_overhead_us = (parallel_time_us * static_cast<uint64_t>(overhead_dist(gen))) / 1000;
 
 	auto end_time = std::chrono::high_resolution_clock::now();
-	metrics.response_time_ms = static_cast<uint64_t>(
-	    std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count());
+	auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+	metrics.response_time_ms = static_cast<uint64_t>((duration_us + 999) / 1000); // Round up to at least 1ms
+
+	// If execution was too fast, use simulated time based on parallel_time_us
+	if (metrics.response_time_ms == 0) {
+		metrics.response_time_ms = (parallel_time_us + 999) / 1000; // Convert us to ms, round up
+	}
 
 	// Calculate throughput (tasks per second)
 	if (metrics.response_time_ms > 0) {
@@ -74,8 +79,8 @@ QueryMetrics BenchmarkFramework::RunQuery(const TPCHQuery &query) {
 	return metrics;
 }
 
-vector<QueryMetrics> BenchmarkFramework::RunWorkload(const vector<TPCHQuery> &queries) {
-	vector<QueryMetrics> results;
+vector<BenchmarkQueryMetrics> BenchmarkFramework::RunWorkload(const vector<TPCHQuery> &queries) {
+	vector<BenchmarkQueryMetrics> results;
 	results.reserve(queries.size());
 
 	// Run queries concurrently
@@ -154,7 +159,7 @@ void BenchmarkFramework::ExportToCSV(const string &filename, const vector<Aggreg
 	file.close();
 }
 
-void BenchmarkFramework::ExportDetailedLogs(const string &filename, const vector<QueryMetrics> &metrics) {
+void BenchmarkFramework::ExportDetailedLogs(const string &filename, const vector<BenchmarkQueryMetrics> &metrics) {
 	std::ofstream file(filename);
 	if (!file.is_open()) {
 		return;
