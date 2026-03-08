@@ -18,6 +18,7 @@ add_library_unity(
   priority_task_queue.cpp
   lock_free_priority_task_queue.cpp
   resource_group.cpp
+  performance_logger.cpp
   task_executor.cpp
   task_notifier.cpp
   task_scheduler.cpp
