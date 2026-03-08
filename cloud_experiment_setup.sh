@@ -209,8 +209,13 @@ EOFINNER
         error "Failed to build $version_name: experiment runner not found"
     fi
 
-    # Return to original branch
+    # Clean up modified files before returning to original branch
     cd "$WORK_DIR"
+    info "Cleaning up modified files..."
+    git checkout -- test/api/CMakeLists.txt 2>/dev/null || true
+    git clean -fd test/api/ 2>/dev/null || true
+
+    # Return to original branch
     git checkout "$CURRENT_BRANCH"
 
     log "$version_name built successfully"
