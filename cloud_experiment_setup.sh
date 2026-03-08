@@ -93,9 +93,23 @@ build_version() {
 
     # Save the comprehensive_experiment_runner.cpp (we'll restore this)
     EXPERIMENT_RUNNER="${WORK_DIR}/test/api/comprehensive_experiment_runner.cpp"
+    PERF_LOGGER_HPP="${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
+    PERF_LOGGER_CPP="${WORK_DIR}/src/parallel/performance_logger.cpp"
+    PARALLEL_CMAKE="${WORK_DIR}/src/parallel/CMakeLists.txt"
 
     if [ -f "$EXPERIMENT_RUNNER" ]; then
         cp "$EXPERIMENT_RUNNER" /tmp/comprehensive_experiment_runner.cpp.backup
+    fi
+
+    # Save performance_logger files (needed by comprehensive_experiment_runner.cpp)
+    if [ -f "$PERF_LOGGER_HPP" ]; then
+        cp "$PERF_LOGGER_HPP" /tmp/performance_logger.hpp.backup
+    fi
+    if [ -f "$PERF_LOGGER_CPP" ]; then
+        cp "$PERF_LOGGER_CPP" /tmp/performance_logger.cpp.backup
+    fi
+    if [ -f "$PARALLEL_CMAKE" ]; then
+        cp "$PARALLEL_CMAKE" /tmp/parallel_CMakeLists.txt.backup
     fi
 
     # Checkout specific commit
@@ -117,6 +131,22 @@ build_version() {
         else
             error "✗ comprehensive_experiment_runner.cpp is missing or empty!"
         fi
+    fi
+
+    # Restore performance_logger files
+    if [ -f /tmp/performance_logger.hpp.backup ]; then
+        mkdir -p "${WORK_DIR}/src/include/duckdb/parallel"
+        cp /tmp/performance_logger.hpp.backup "${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
+        info "Restored performance_logger.hpp"
+    fi
+    if [ -f /tmp/performance_logger.cpp.backup ]; then
+        mkdir -p "${WORK_DIR}/src/parallel"
+        cp /tmp/performance_logger.cpp.backup "${WORK_DIR}/src/parallel/performance_logger.cpp"
+        info "Restored performance_logger.cpp"
+    fi
+    if [ -f /tmp/parallel_CMakeLists.txt.backup ]; then
+        cp /tmp/parallel_CMakeLists.txt.backup "${WORK_DIR}/src/parallel/CMakeLists.txt"
+        info "Restored src/parallel/CMakeLists.txt (includes performance_logger.cpp)"
     fi
 
     # Add comprehensive_experiment_runner target to CMakeLists.txt if not exists
