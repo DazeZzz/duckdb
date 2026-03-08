@@ -180,25 +180,29 @@ EOFINNER
         warn "⚠ test/api/Makefile not generated"
     fi
 
-    # Build duckdb CLI
+    # Build duckdb CLI (optional, mainly for debugging)
     info "Building duckdb CLI..."
-    make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"
+    if make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"; then
+        info "✓ duckdb CLI built successfully"
+    else
+        warn "⚠ duckdb CLI build failed (not critical for experiments)"
+    fi
 
-    # Build experiment runner
+    # Build experiment runner (required)
     info "Building comprehensive_experiment_runner..."
     make -j$(nproc) comprehensive_experiment_runner 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Verify binary exists
     info "Checking for binaries..."
 
-    # Check for duckdb binary
+    # Check for duckdb binary (optional)
     if [ -f "$build_path/duckdb" ]; then
         info "✓ duckdb binary found at $build_path/duckdb"
     else
-        error "Failed to build $version_name: duckdb binary not found at $build_path/duckdb"
+        warn "⚠ duckdb binary not found (not critical for experiments)"
     fi
 
-    # Check for experiment runner
+    # Check for experiment runner (required)
     if [ -f "$build_path/test/api/comprehensive_experiment_runner" ]; then
         info "✓ comprehensive_experiment_runner found"
     else
