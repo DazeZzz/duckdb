@@ -161,7 +161,7 @@ EOFINNER
     # Configure with CMake (source dir is $WORK_DIR, build dir is current)
     info "Configuring CMake..."
     cmake -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_UNITTESTS=0 \
+          -DBUILD_UNITTESTS=1 \
           "$WORK_DIR" 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Verify CMake configuration
