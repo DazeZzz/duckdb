@@ -232,25 +232,37 @@ generate_tpch_data() {
         return
     fi
 
-    # Check if duckdb CLI is available
+    # Check if duckdb CLI is available, if not try to build it
     if [ ! -f "${BUILD_DIR}/native/duckdb" ]; then
-        error "duckdb CLI not found. Please generate TPC-H data manually:
+        warn "duckdb CLI not found, attempting to build it..."
+        cd "${BUILD_DIR}/native"
 
-1. Build duckdb CLI separately:
+        info "Building duckdb CLI for data generation..."
+        if make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"; then
+            info "✓ duckdb CLI built successfully"
+        else
+            error "Failed to build duckdb CLI. Please generate TPC-H data manually:
+
+1. Try building duckdb CLI separately:
    cd ${BUILD_DIR}/native && make -j\$(nproc) duckdb
 
 2. Or generate data using Python:
-   import duckdb
-   con = duckdb.connect('$TPCH_DB')
-   con.execute('INSTALL tpch')
-   con.execute('LOAD tpch')
-   con.execute('CALL dbgen(sf=50)')
-   con.close()
+   python3 << 'PYEOF'
+import duckdb
+con = duckdb.connect('$TPCH_DB')
+con.execute('INSTALL tpch')
+con.execute('LOAD tpch')
+con.execute('CALL dbgen(sf=50)')
+con.close()
+PYEOF
 
 3. Then re-run this script"
+        fi
+        cd "$WORK_DIR"
     fi
 
     # Use native version to generate data
+    info "Generating TPC-H SF50 data (this may take 10-20 minutes)..."
     "${BUILD_DIR}/native/duckdb" "$TPCH_DB" <<'EOF'
 SET autoinstall_known_extensions=1;
 SET autoload_known_extensions=1;
