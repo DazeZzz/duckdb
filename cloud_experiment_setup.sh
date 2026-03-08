@@ -232,6 +232,24 @@ generate_tpch_data() {
         return
     fi
 
+    # Check if duckdb CLI is available
+    if [ ! -f "${BUILD_DIR}/native/duckdb" ]; then
+        error "duckdb CLI not found. Please generate TPC-H data manually:
+
+1. Build duckdb CLI separately:
+   cd ${BUILD_DIR}/native && make -j\$(nproc) duckdb
+
+2. Or generate data using Python:
+   import duckdb
+   con = duckdb.connect('$TPCH_DB')
+   con.execute('INSTALL tpch')
+   con.execute('LOAD tpch')
+   con.execute('CALL dbgen(sf=50)')
+   con.close()
+
+3. Then re-run this script"
+    fi
+
     # Use native version to generate data
     "${BUILD_DIR}/native/duckdb" "$TPCH_DB" <<'EOF'
 SET autoinstall_known_extensions=1;
