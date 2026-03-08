@@ -130,8 +130,9 @@ link_extension_libraries(comprehensive_experiment_runner "")
 EOF
     info "✓ Added comprehensive_experiment_runner target to CMakeLists.txt"
 
-    # Build in-source (simpler and more reliable)
-    cd "$WORK_DIR"
+    # Build out-of-source (keeps source directory clean)
+    mkdir -p "$build_path"
+    cd "$build_path"
 
     # Clean CMake cache to ensure it picks up the restored files
     if [ -f "CMakeCache.txt" ]; then
@@ -139,20 +140,16 @@ EOF
         info "Cleaned CMake cache to force reconfiguration"
     fi
 
+    # Configure with CMake (source dir is $WORK_DIR, build dir is current)
     cmake -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_UNITTESTS=0 \
-          . 2>&1 | tee -a "$PROGRESS_FILE"
+          "$WORK_DIR" 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Build duckdb CLI
     make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Build experiment runner
     make -j$(nproc) comprehensive_experiment_runner 2>&1 | tee -a "$PROGRESS_FILE"
-
-    # Copy binaries to build directory
-    mkdir -p "$build_path"
-    cp duckdb "$build_path/" 2>/dev/null || true
-    cp test/api/comprehensive_experiment_runner "$build_path/" 2>/dev/null || true
 
     # Verify binary exists
     info "Checking for binaries..."
@@ -165,7 +162,7 @@ EOF
     fi
 
     # Check for experiment runner
-    if [ -f "$build_path/comprehensive_experiment_runner" ]; then
+    if [ -f "$build_path/test/api/comprehensive_experiment_runner" ]; then
         info "✓ comprehensive_experiment_runner found"
     else
         error "Failed to build $version_name: experiment runner not found"
@@ -218,7 +215,7 @@ run_experiments() {
     mkdir -p "$results_path"
 
     # Run experiment runner with progress monitoring
-    "${build_path}/comprehensive_experiment_runner" \
+    "${build_path}/test/api/comprehensive_experiment_runner" \
         "$TPCH_DB" \
         "$results_path" \
         2>&1 | while IFS= read -r line; do
