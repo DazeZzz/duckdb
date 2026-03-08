@@ -13,11 +13,11 @@ RESULTS_DIR="${WORK_DIR}/experiment_results"
 PROGRESS_FILE="${WORK_DIR}/experiment_progress.log"
 TPCH_DB="${WORK_DIR}/tpch_sf50.db"
 
-# Version definitions (commit hashes)
-NATIVE_COMMIT="48bdbbebe4"  # Native DuckDB (main branch baseline)
-STAGE2_COMMIT="7e5eb201ad"  # Phase 1: Stride + IF
-STAGE3_COMMIT="cb54825ddb"  # Phase 2: Stride + IF + Morsel
-FINAL_COMMIT="HEAD"          # Current HEAD with all phases
+# Version definitions (branch names with PerformanceLogger)
+NATIVE_COMMIT="native-with-perf"   # Native DuckDB with PerformanceLogger
+STAGE2_COMMIT="stage2-with-perf"   # Phase 1: Stride + IF with PerformanceLogger
+STAGE3_COMMIT="stage3-with-perf"   # Phase 2: Stride + IF + Morsel with PerformanceLogger
+FINAL_COMMIT="final-with-perf"     # All phases with PerformanceLogger
 
 # Color output
 RED='\033[0;31m'
