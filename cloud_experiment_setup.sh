@@ -130,8 +130,8 @@ link_extension_libraries(comprehensive_experiment_runner "")
 EOF
     info "✓ Added comprehensive_experiment_runner target to CMakeLists.txt"
 
-    # Build
-    cd "$build_path"
+    # Build in-source (simpler and more reliable)
+    cd "$WORK_DIR"
 
     # Clean CMake cache to ensure it picks up the restored files
     if [ -f "CMakeCache.txt" ]; then
@@ -140,31 +140,24 @@ EOF
     fi
 
     cmake -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_UNITTESTS=ON \
-          -DBUILD_SHELL=ON \
-          "$WORK_DIR" 2>&1 | tee -a "$PROGRESS_FILE"
+          -DBUILD_UNITTESTS=0 \
+          . 2>&1 | tee -a "$PROGRESS_FILE"
 
-    # Verify CMake generated the comprehensive_experiment_runner target
-    if [ -f "$build_path/test/api/Makefile" ]; then
-        info "✓ test/api/Makefile exists"
-        if grep -q "comprehensive_experiment_runner" "$build_path/test/api/Makefile"; then
-            info "✓ Verified: Makefile contains comprehensive_experiment_runner target"
-        else
-            warn "✗ Makefile does not contain comprehensive_experiment_runner target"
-        fi
-    else
-        warn "✗ test/api/Makefile not found"
-    fi
-
-    make -j$(nproc) shell 2>&1 | tee -a "$PROGRESS_FILE"
+    # Build duckdb CLI
+    make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Build experiment runner
     make -j$(nproc) comprehensive_experiment_runner 2>&1 | tee -a "$PROGRESS_FILE"
 
+    # Copy binaries to build directory
+    mkdir -p "$build_path"
+    cp duckdb "$build_path/" 2>/dev/null || true
+    cp test/api/comprehensive_experiment_runner "$build_path/" 2>/dev/null || true
+
     # Verify binary exists
     info "Checking for binaries..."
 
-    # Check for duckdb binary (output of shell target, linked to build root)
+    # Check for duckdb binary
     if [ -f "$build_path/duckdb" ]; then
         info "✓ duckdb binary found at $build_path/duckdb"
     else
@@ -172,7 +165,7 @@ EOF
     fi
 
     # Check for experiment runner
-    if [ -f "$build_path/test/api/comprehensive_experiment_runner" ]; then
+    if [ -f "$build_path/comprehensive_experiment_runner" ]; then
         info "✓ comprehensive_experiment_runner found"
     else
         error "Failed to build $version_name: experiment runner not found"
@@ -225,7 +218,7 @@ run_experiments() {
     mkdir -p "$results_path"
 
     # Run experiment runner with progress monitoring
-    "${build_path}/test/api/comprehensive_experiment_runner" \
+    "${build_path}/comprehensive_experiment_runner" \
         "$TPCH_DB" \
         "$results_path" \
         2>&1 | while IFS= read -r line; do
