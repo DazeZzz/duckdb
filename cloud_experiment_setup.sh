@@ -122,13 +122,15 @@ build_version() {
     # Add comprehensive_experiment_runner target to CMakeLists.txt if not exists
     if ! grep -q "comprehensive_experiment_runner" "$CMAKE_FILE"; then
         info "Adding comprehensive_experiment_runner target to CMakeLists.txt"
-        cat >> "$CMAKE_FILE" << 'EOF'
-
-# Comprehensive Experiment Runner for Phase-Aware Scheduler
-add_executable(comprehensive_experiment_runner comprehensive_experiment_runner.cpp)
-target_link_libraries(comprehensive_experiment_runner duckdb_static)
+        # Insert before the last line (which is usually PARENT_SCOPE or similar)
+        # Find the line with "add_library(test_api" and insert after it
+        sed -i.bak '/add_library(test_api OBJECT/a\
+\
+# Comprehensive Experiment Runner for Phase-Aware Scheduler\
+add_executable(comprehensive_experiment_runner comprehensive_experiment_runner.cpp)\
+target_link_libraries(comprehensive_experiment_runner duckdb_static)\
 link_extension_libraries(comprehensive_experiment_runner "")
-EOF
+' "$CMAKE_FILE"
         info "✓ Added comprehensive_experiment_runner target to CMakeLists.txt"
     else
         info "✓ comprehensive_experiment_runner target already exists in CMakeLists.txt"
