@@ -180,27 +180,12 @@ EOFINNER
         warn "⚠ test/api/Makefile not generated"
     fi
 
-    # Build duckdb CLI (optional, mainly for debugging)
-    info "Building duckdb CLI..."
-    if make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"; then
-        info "✓ duckdb CLI built successfully"
-    else
-        warn "⚠ duckdb CLI build failed (not critical for experiments)"
-    fi
-
     # Build experiment runner (required)
     info "Building comprehensive_experiment_runner..."
     make -j$(nproc) comprehensive_experiment_runner 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Verify binary exists
     info "Checking for binaries..."
-
-    # Check for duckdb binary (optional)
-    if [ -f "$build_path/duckdb" ]; then
-        info "✓ duckdb binary found at $build_path/duckdb"
-    else
-        warn "⚠ duckdb binary not found (not critical for experiments)"
-    fi
 
     # Check for experiment runner (required)
     if [ -f "$build_path/test/api/comprehensive_experiment_runner" ]; then
@@ -232,47 +217,65 @@ generate_tpch_data() {
         return
     fi
 
-    # Check if duckdb CLI is available, if not try to build it
-    if [ ! -f "${BUILD_DIR}/native/duckdb" ]; then
-        warn "duckdb CLI not found, attempting to build it..."
-        cd "${BUILD_DIR}/native"
-
-        info "Building duckdb CLI for data generation..."
-        if make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"; then
-            info "✓ duckdb CLI built successfully"
-        else
-            warn "⚠ Failed to build duckdb CLI. Please generate TPC-H data manually:
-
-1. Try building duckdb CLI separately:
-   cd ${BUILD_DIR}/native && make -j\$(nproc) duckdb
-
-2. Or generate data using Python:
-   python3 << 'PYEOF'
-import duckdb
-con = duckdb.connect('$TPCH_DB')
-con.execute('INSTALL tpch')
-con.execute('LOAD tpch')
-con.execute('CALL dbgen(sf=50)')
-con.close()
-PYEOF
-
-3. Then re-run this script"
-            cd "$WORK_DIR"
-            return  # Skip data generation but continue with experiments
-        fi
-        cd "$WORK_DIR"
+    # Check if Python3 is available
+    if ! command -v python3 &> /dev/null; then
+        error "Python3 is not installed. Please install Python3 first."
     fi
 
-    # Use native version to generate data
-    info "Generating TPC-H SF50 data (this may take 10-20 minutes)..."
-    "${BUILD_DIR}/native/duckdb" "$TPCH_DB" <<'EOF'
-SET autoinstall_known_extensions=1;
-SET autoload_known_extensions=1;
-INSTALL tpch;
-LOAD tpch;
-CALL dbgen(sf=50);
-SELECT 'TPC-H data generation completed' as status;
-EOF
+    info "Checking Python duckdb package..."
+
+    # Check if duckdb package is installed
+    if ! python3 -c "import duckdb" 2>/dev/null; then
+        warn "duckdb Python package not found, installing..."
+
+        # Check if pip3 is available
+        if ! command -v pip3 &> /dev/null; then
+            error "pip3 is not installed. Please install pip3 first:
+    sudo apt-get update && sudo apt-get install -y python3-pip"
+        fi
+
+        # Install duckdb package
+        info "Installing duckdb Python package (this may take a few minutes)..."
+        if pip3 install duckdb 2>&1 | tee -a "$PROGRESS_FILE"; then
+            info "✓ duckdb Python package installed successfully"
+        else
+            error "Failed to install duckdb Python package. Please install manually:
+    pip3 install duckdb"
+        fi
+    else
+        info "✓ duckdb Python package is already installed"
+    fi
+
+    # Generate TPC-H data using Python
+    info "Generating TPC-H SF50 data using Python (this may take 10-20 minutes)..."
+    python3 <<PYEOF
+import duckdb
+import sys
+
+try:
+    print("Connecting to database: $TPCH_DB")
+    con = duckdb.connect('$TPCH_DB')
+
+    print("Installing TPC-H extension...")
+    con.execute('INSTALL tpch')
+
+    print("Loading TPC-H extension...")
+    con.execute('LOAD tpch')
+
+    print("Generating TPC-H SF50 data (this will take some time)...")
+    con.execute('CALL dbgen(sf=50)')
+
+    print("TPC-H data generation completed successfully")
+    con.close()
+    sys.exit(0)
+except Exception as e:
+    print(f"Error generating TPC-H data: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
+    if [ $? -ne 0 ]; then
+        error "Failed to generate TPC-H data. Please check the error messages above."
+    fi
 
     # Verify database
     DB_SIZE=$(du -h "$TPCH_DB" | cut -f1)
