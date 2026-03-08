@@ -112,42 +112,10 @@ build_version() {
         fi
     fi
 
-    # Restore performance_logger files
-    if [ -f /tmp/performance_logger.hpp.backup ]; then
-        mkdir -p "${WORK_DIR}/src/include/duckdb/parallel"
-        cp /tmp/performance_logger.hpp.backup "${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
-        info "Restored performance_logger.hpp"
-    fi
-    if [ -f /tmp/performance_logger.cpp.backup ]; then
-        mkdir -p "${WORK_DIR}/src/parallel"
-        cp /tmp/performance_logger.cpp.backup "${WORK_DIR}/src/parallel/performance_logger.cpp"
-        info "Restored performance_logger.cpp"
-    fi
-
-    # Add performance_logger.cpp to src/parallel/CMakeLists.txt if not exists
-    PARALLEL_CMAKE_FILE="${WORK_DIR}/src/parallel/CMakeLists.txt"
-    if [ -f "$PARALLEL_CMAKE_FILE" ] && ! grep -q "performance_logger.cpp" "$PARALLEL_CMAKE_FILE"; then
-        info "Adding performance_logger.cpp to src/parallel/CMakeLists.txt"
-
-        # Create a temporary file with the new content
-        TMP_FILE=$(mktemp)
-
-        # Read the original file and insert performance_logger.cpp before thread_context.cpp)
-        while IFS= read -r line; do
-            # Check if this line contains thread_context.cpp)
-            if [[ "$line" =~ "thread_context.cpp)" ]]; then
-                # Insert performance_logger.cpp before this line
-                echo "  performance_logger.cpp" >> "$TMP_FILE"
-            fi
-            echo "$line" >> "$TMP_FILE"
-        done < "$PARALLEL_CMAKE_FILE"
-
-        # Replace the original file
-        mv "$TMP_FILE" "$PARALLEL_CMAKE_FILE"
-        info "✓ Added performance_logger.cpp to src/parallel/CMakeLists.txt"
-    else
-        info "✓ performance_logger.cpp already exists in src/parallel/CMakeLists.txt or file not found"
-    fi
+    # Note: We don't restore performance_logger files for old commits
+    # The comprehensive_experiment_runner.cpp uses conditional compilation
+    # and will detect that performance_logger.hpp is not available
+    # and use fallback code without PerformanceLogger
 
     # Add comprehensive_experiment_runner target to CMakeLists.txt if not exists
     if ! grep -q "comprehensive_experiment_runner" "$CMAKE_FILE"; then
@@ -334,28 +302,12 @@ main() {
     info "Saving necessary files for all builds..."
 
     EXPERIMENT_RUNNER="${WORK_DIR}/test/api/comprehensive_experiment_runner.cpp"
-    PERF_LOGGER_HPP="${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
-    PERF_LOGGER_CPP="${WORK_DIR}/src/parallel/performance_logger.cpp"
 
     if [ -f "$EXPERIMENT_RUNNER" ]; then
         cp "$EXPERIMENT_RUNNER" /tmp/comprehensive_experiment_runner.cpp.backup
         info "✓ Saved comprehensive_experiment_runner.cpp"
     else
         error "comprehensive_experiment_runner.cpp not found at $EXPERIMENT_RUNNER"
-    fi
-
-    if [ -f "$PERF_LOGGER_HPP" ]; then
-        cp "$PERF_LOGGER_HPP" /tmp/performance_logger.hpp.backup
-        info "✓ Saved performance_logger.hpp"
-    else
-        error "performance_logger.hpp not found at $PERF_LOGGER_HPP"
-    fi
-
-    if [ -f "$PERF_LOGGER_CPP" ]; then
-        cp "$PERF_LOGGER_CPP" /tmp/performance_logger.cpp.backup
-        info "✓ Saved performance_logger.cpp"
-    else
-        error "performance_logger.cpp not found at $PERF_LOGGER_CPP"
     fi
 
     log "All necessary files saved successfully"
