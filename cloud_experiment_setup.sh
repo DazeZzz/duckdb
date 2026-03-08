@@ -123,9 +123,30 @@ build_version() {
         cp /tmp/performance_logger.cpp.backup "${WORK_DIR}/src/parallel/performance_logger.cpp"
         info "Restored performance_logger.cpp"
     fi
-    if [ -f /tmp/parallel_CMakeLists.txt.backup ]; then
-        cp /tmp/parallel_CMakeLists.txt.backup "${WORK_DIR}/src/parallel/CMakeLists.txt"
-        info "Restored src/parallel/CMakeLists.txt (includes performance_logger.cpp)"
+
+    # Add performance_logger.cpp to src/parallel/CMakeLists.txt if not exists
+    PARALLEL_CMAKE_FILE="${WORK_DIR}/src/parallel/CMakeLists.txt"
+    if [ -f "$PARALLEL_CMAKE_FILE" ] && ! grep -q "performance_logger.cpp" "$PARALLEL_CMAKE_FILE"; then
+        info "Adding performance_logger.cpp to src/parallel/CMakeLists.txt"
+
+        # Create a temporary file with the new content
+        TMP_FILE=$(mktemp)
+
+        # Read the original file and insert performance_logger.cpp before the closing parenthesis
+        while IFS= read -r line; do
+            # Check if this is the last line before set(ALL_OBJECT_FILES
+            if [[ "$line" =~ "set(ALL_OBJECT_FILES" ]]; then
+                # Insert performance_logger.cpp before this line
+                echo "  performance_logger.cpp" >> "$TMP_FILE"
+            fi
+            echo "$line" >> "$TMP_FILE"
+        done < "$PARALLEL_CMAKE_FILE"
+
+        # Replace the original file
+        mv "$TMP_FILE" "$PARALLEL_CMAKE_FILE"
+        info "✓ Added performance_logger.cpp to src/parallel/CMakeLists.txt"
+    else
+        info "✓ performance_logger.cpp already exists in src/parallel/CMakeLists.txt or file not found"
     fi
 
     # Add comprehensive_experiment_runner target to CMakeLists.txt if not exists
@@ -315,7 +336,6 @@ main() {
     EXPERIMENT_RUNNER="${WORK_DIR}/test/api/comprehensive_experiment_runner.cpp"
     PERF_LOGGER_HPP="${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
     PERF_LOGGER_CPP="${WORK_DIR}/src/parallel/performance_logger.cpp"
-    PARALLEL_CMAKE="${WORK_DIR}/src/parallel/CMakeLists.txt"
 
     if [ -f "$EXPERIMENT_RUNNER" ]; then
         cp "$EXPERIMENT_RUNNER" /tmp/comprehensive_experiment_runner.cpp.backup
@@ -336,13 +356,6 @@ main() {
         info "✓ Saved performance_logger.cpp"
     else
         error "performance_logger.cpp not found at $PERF_LOGGER_CPP"
-    fi
-
-    if [ -f "$PARALLEL_CMAKE" ]; then
-        cp "$PARALLEL_CMAKE" /tmp/parallel_CMakeLists.txt.backup
-        info "✓ Saved src/parallel/CMakeLists.txt"
-    else
-        error "src/parallel/CMakeLists.txt not found at $PARALLEL_CMAKE"
     fi
 
     log "All necessary files saved successfully"
