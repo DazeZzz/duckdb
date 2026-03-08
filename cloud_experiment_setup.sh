@@ -241,7 +241,7 @@ generate_tpch_data() {
         if make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"; then
             info "✓ duckdb CLI built successfully"
         else
-            error "Failed to build duckdb CLI. Please generate TPC-H data manually:
+            warn "⚠ Failed to build duckdb CLI. Please generate TPC-H data manually:
 
 1. Try building duckdb CLI separately:
    cd ${BUILD_DIR}/native && make -j\$(nproc) duckdb
@@ -257,6 +257,8 @@ con.close()
 PYEOF
 
 3. Then re-run this script"
+            cd "$WORK_DIR"
+            return  # Skip data generation but continue with experiments
         fi
         cd "$WORK_DIR"
     fi
