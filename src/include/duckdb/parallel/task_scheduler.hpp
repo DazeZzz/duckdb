@@ -96,6 +96,9 @@ public:
 	//! Result do not need to be exact 'return 0' is a valid fallback strategy
 	static idx_t GetEstimatedCPUId();
 
+t//! Get the performance logger for experimental data collection
+tclass PerformanceLogger &GetPerformanceLogger();
+
 private:
 	void RelaunchThreadsInternal(int32_t n);
 
@@ -121,6 +124,8 @@ private:
 	atomic<int32_t> requested_thread_count;
 	//! The amount of threads currently running
 	atomic<int32_t> current_thread_count;
+t//! Performance logger for experimental data collection
+tunique_ptr<class PerformanceLogger> performance_logger;
 };
 
 } // namespace duckdb
