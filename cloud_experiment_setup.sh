@@ -119,16 +119,20 @@ build_version() {
         fi
     fi
 
-    # Add comprehensive_experiment_runner target to CMakeLists.txt
-    info "Adding comprehensive_experiment_runner target to CMakeLists.txt"
-    cat >> "$CMAKE_FILE" << 'EOF'
+    # Add comprehensive_experiment_runner target to CMakeLists.txt if not exists
+    if ! grep -q "comprehensive_experiment_runner" "$CMAKE_FILE"; then
+        info "Adding comprehensive_experiment_runner target to CMakeLists.txt"
+        cat >> "$CMAKE_FILE" << 'EOF'
 
 # Comprehensive Experiment Runner for Phase-Aware Scheduler
 add_executable(comprehensive_experiment_runner comprehensive_experiment_runner.cpp)
 target_link_libraries(comprehensive_experiment_runner duckdb_static)
 link_extension_libraries(comprehensive_experiment_runner "")
 EOF
-    info "✓ Added comprehensive_experiment_runner target to CMakeLists.txt"
+        info "✓ Added comprehensive_experiment_runner target to CMakeLists.txt"
+    else
+        info "✓ comprehensive_experiment_runner target already exists in CMakeLists.txt"
+    fi
 
     # Build out-of-source (keeps source directory clean)
     mkdir -p "$build_path"
@@ -141,14 +145,35 @@ EOF
     fi
 
     # Configure with CMake (source dir is $WORK_DIR, build dir is current)
+    info "Configuring CMake..."
     cmake -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_UNITTESTS=0 \
           "$WORK_DIR" 2>&1 | tee -a "$PROGRESS_FILE"
 
+    # Verify CMake configuration
+    if [ ! -f "Makefile" ]; then
+        error "CMake failed to generate Makefile"
+    fi
+
+    # Check if comprehensive_experiment_runner target exists in Makefile
+    if [ -f "test/api/Makefile" ]; then
+        if grep -q "comprehensive_experiment_runner" "test/api/Makefile"; then
+            info "✓ Verified: comprehensive_experiment_runner target found in Makefile"
+        else
+            warn "⚠ comprehensive_experiment_runner target NOT found in test/api/Makefile"
+            info "Checking CMakeLists.txt content:"
+            tail -n 10 "$CMAKE_FILE" | tee -a "$PROGRESS_FILE"
+        fi
+    else
+        warn "⚠ test/api/Makefile not generated"
+    fi
+
     # Build duckdb CLI
+    info "Building duckdb CLI..."
     make -j$(nproc) duckdb 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Build experiment runner
+    info "Building comprehensive_experiment_runner..."
     make -j$(nproc) comprehensive_experiment_runner 2>&1 | tee -a "$PROGRESS_FILE"
 
     # Verify binary exists
