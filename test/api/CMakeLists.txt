@@ -63,3 +63,8 @@ add_library(test_api OBJECT ${TEST_API_OBJECTS})
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
     PARENT_SCOPE)
+
+# Comprehensive Experiment Runner for Phase-Aware Scheduler
+add_executable(comprehensive_experiment_runner comprehensive_experiment_runner.cpp)
+target_link_libraries(comprehensive_experiment_runner duckdb_static)
+link_extension_libraries(comprehensive_experiment_runner "")
