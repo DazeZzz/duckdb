@@ -91,27 +91,6 @@ build_version() {
     # Save current branch
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-    # Save the comprehensive_experiment_runner.cpp (we'll restore this)
-    EXPERIMENT_RUNNER="${WORK_DIR}/test/api/comprehensive_experiment_runner.cpp"
-    PERF_LOGGER_HPP="${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
-    PERF_LOGGER_CPP="${WORK_DIR}/src/parallel/performance_logger.cpp"
-    PARALLEL_CMAKE="${WORK_DIR}/src/parallel/CMakeLists.txt"
-
-    if [ -f "$EXPERIMENT_RUNNER" ]; then
-        cp "$EXPERIMENT_RUNNER" /tmp/comprehensive_experiment_runner.cpp.backup
-    fi
-
-    # Save performance_logger files (needed by comprehensive_experiment_runner.cpp)
-    if [ -f "$PERF_LOGGER_HPP" ]; then
-        cp "$PERF_LOGGER_HPP" /tmp/performance_logger.hpp.backup
-    fi
-    if [ -f "$PERF_LOGGER_CPP" ]; then
-        cp "$PERF_LOGGER_CPP" /tmp/performance_logger.cpp.backup
-    fi
-    if [ -f "$PARALLEL_CMAKE" ]; then
-        cp "$PARALLEL_CMAKE" /tmp/parallel_CMakeLists.txt.backup
-    fi
-
     # Checkout specific commit
     git checkout "$commit_hash" 2>&1 | tee -a "$PROGRESS_FILE"
 
@@ -120,7 +99,7 @@ build_version() {
     git checkout HEAD -- test/api/CMakeLists.txt 2>&1 | tee -a "$PROGRESS_FILE"
     info "Restored CMakeLists.txt to clean state from commit"
 
-    # Restore comprehensive_experiment_runner.cpp
+    # Restore comprehensive_experiment_runner.cpp (saved in main function)
     if [ -f /tmp/comprehensive_experiment_runner.cpp.backup ]; then
         cp /tmp/comprehensive_experiment_runner.cpp.backup "${WORK_DIR}/test/api/comprehensive_experiment_runner.cpp"
         info "Restored comprehensive_experiment_runner.cpp"
@@ -314,6 +293,59 @@ main() {
     mkdir -p "$BUILD_DIR" "$RESULTS_DIR"
     echo "=== Experiment Progress Log ===" > "$PROGRESS_FILE"
     echo "Started at: $(date)" >> "$PROGRESS_FILE"
+
+    # Step 0: Ensure we're on the latest commit and save all necessary files
+    log "Preparing necessary files from latest commit..."
+    ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    ORIGINAL_COMMIT=$(git rev-parse HEAD)
+    info "Current branch: $ORIGINAL_BRANCH, commit: $ORIGINAL_COMMIT"
+
+    # Checkout to latest commit if not already there
+    # If FINAL_COMMIT is HEAD, we need to make sure we're on the right branch
+    if [ "$FINAL_COMMIT" = "HEAD" ]; then
+        # We're already on the right branch, just make sure we're at HEAD
+        git checkout HEAD 2>&1 | tee -a "$PROGRESS_FILE"
+    else
+        git checkout "$FINAL_COMMIT" 2>&1 | tee -a "$PROGRESS_FILE"
+    fi
+
+    # Save all necessary files to /tmp (these will be restored for each build)
+    info "Saving necessary files for all builds..."
+
+    EXPERIMENT_RUNNER="${WORK_DIR}/test/api/comprehensive_experiment_runner.cpp"
+    PERF_LOGGER_HPP="${WORK_DIR}/src/include/duckdb/parallel/performance_logger.hpp"
+    PERF_LOGGER_CPP="${WORK_DIR}/src/parallel/performance_logger.cpp"
+    PARALLEL_CMAKE="${WORK_DIR}/src/parallel/CMakeLists.txt"
+
+    if [ -f "$EXPERIMENT_RUNNER" ]; then
+        cp "$EXPERIMENT_RUNNER" /tmp/comprehensive_experiment_runner.cpp.backup
+        info "✓ Saved comprehensive_experiment_runner.cpp"
+    else
+        error "comprehensive_experiment_runner.cpp not found at $EXPERIMENT_RUNNER"
+    fi
+
+    if [ -f "$PERF_LOGGER_HPP" ]; then
+        cp "$PERF_LOGGER_HPP" /tmp/performance_logger.hpp.backup
+        info "✓ Saved performance_logger.hpp"
+    else
+        error "performance_logger.hpp not found at $PERF_LOGGER_HPP"
+    fi
+
+    if [ -f "$PERF_LOGGER_CPP" ]; then
+        cp "$PERF_LOGGER_CPP" /tmp/performance_logger.cpp.backup
+        info "✓ Saved performance_logger.cpp"
+    else
+        error "performance_logger.cpp not found at $PERF_LOGGER_CPP"
+    fi
+
+    if [ -f "$PARALLEL_CMAKE" ]; then
+        cp "$PARALLEL_CMAKE" /tmp/parallel_CMakeLists.txt.backup
+        info "✓ Saved src/parallel/CMakeLists.txt"
+    else
+        error "src/parallel/CMakeLists.txt not found at $PARALLEL_CMAKE"
+    fi
+
+    log "All necessary files saved successfully"
 
     # Step 1: Check requirements (0-10%)
     check_requirements
