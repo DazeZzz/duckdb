@@ -132,10 +132,10 @@ build_version() {
         # Create a temporary file with the new content
         TMP_FILE=$(mktemp)
 
-        # Read the original file and insert performance_logger.cpp before the closing parenthesis
+        # Read the original file and insert performance_logger.cpp before thread_context.cpp)
         while IFS= read -r line; do
-            # Check if this is the last line before set(ALL_OBJECT_FILES
-            if [[ "$line" =~ "set(ALL_OBJECT_FILES" ]]; then
+            # Check if this line contains thread_context.cpp)
+            if [[ "$line" =~ "thread_context.cpp)" ]]; then
                 # Insert performance_logger.cpp before this line
                 echo "  performance_logger.cpp" >> "$TMP_FILE"
             fi
