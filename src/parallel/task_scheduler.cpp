@@ -517,7 +517,7 @@ void TaskScheduler::Signal(idx_t n) {
 }
 
 PerformanceLogger &TaskScheduler::GetPerformanceLogger() {
-treturn *performance_logger;
+	return *performance_logger;
 }
 
 void TaskScheduler::YieldThread() {
