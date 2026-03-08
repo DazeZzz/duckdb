@@ -18,6 +18,7 @@ add_library_unity(
   task_executor.cpp
   task_notifier.cpp
   task_scheduler.cpp
+  performance_logger.cpp
   thread_context.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parallel>
