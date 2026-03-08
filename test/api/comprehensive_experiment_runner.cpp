@@ -12,7 +12,19 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/parallel/performance_logger.hpp"
+
+// Conditionally include performance_logger.hpp (only available in newer commits)
+#ifdef __has_include
+#  if __has_include("duckdb/parallel/performance_logger.hpp")
+#    include "duckdb/parallel/performance_logger.hpp"
+#    define HAS_PERFORMANCE_LOGGER 1
+#  else
+#    define HAS_PERFORMANCE_LOGGER 0
+#  endif
+#else
+#  define HAS_PERFORMANCE_LOGGER 0
+#endif
+
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -179,10 +191,13 @@ struct QueryResult {
 };
 
 // Helper function to get PerformanceLogger from database
+#if HAS_PERFORMANCE_LOGGER
 PerformanceLogger& get_performance_logger(DuckDB &db) {
 	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
 	return scheduler.GetPerformanceLogger();
 };
+#endif
+
 
 // Configure database with specific stage settings
 void configure_database(DuckDB &db, const SystemStage &stage) {
@@ -228,10 +243,12 @@ DetailedQueryMetrics run_query_with_metrics(DuckDB &db, Connection &con, const s
 	DetailedQueryMetrics metrics;
 	metrics.success = false;
 
+#if HAS_PERFORMANCE_LOGGER
 	// Get performance logger
 	auto &logger = get_performance_logger(db);
 	logger.Clear();
 	logger.SetEnabled(true);
+#endif
 
 	auto start = high_resolution_clock::now();
 
@@ -244,7 +261,9 @@ DetailedQueryMetrics run_query_with_metrics(DuckDB &db, Connection &con, const s
 		metrics.success = true;
 	} catch (const Exception &e) {
 		cerr << "Query failed: " << e.what() << "\n";
+#if HAS_PERFORMANCE_LOGGER
 		logger.SetEnabled(false);
+#endif
 		return metrics;
 	}
 
@@ -252,12 +271,18 @@ DetailedQueryMetrics run_query_with_metrics(DuckDB &db, Connection &con, const s
 	auto duration = duration_cast<microseconds>(end - start);
 	metrics.response_time_ms = static_cast<double>(duration.count()) / 1000.0;
 
+#if HAS_PERFORMANCE_LOGGER
 	// Get metrics from logger
 	metrics.total_tasks = logger.GetTotalTasks();
 	// Note: scheduling_overhead_ms would need to be calculated from task metrics
 	metrics.scheduling_overhead_ms = 0.0; // Placeholder
 
 	logger.SetEnabled(false);
+#else
+	// Without performance logger, set default values
+	metrics.total_tasks = 0;
+	metrics.scheduling_overhead_ms = 0.0;
+#endif
 
 	return metrics;
 }
@@ -467,10 +492,12 @@ void experiment_2_1(const string &db_path, const string &output_dir) {
 
 	cout << "Running " << test_query << " with " << stage.name << " to track morsel adjustments...\n";
 
+#if HAS_PERFORMANCE_LOGGER
 	// Get performance logger
 	auto &logger = get_performance_logger(db);
 	logger.Clear();
 	logger.SetEnabled(true);
+#endif
 
 	try {
 		auto result = con.Query(TPCH_QUERIES[q_idx]);
@@ -481,6 +508,7 @@ void experiment_2_1(const string &db_path, const string &output_dir) {
 		cerr << "Query failed: " << e.what() << "\n";
 	}
 
+#if HAS_PERFORMANCE_LOGGER
 	logger.SetEnabled(false);
 
 	// Export task metrics which contain morsel information
@@ -490,6 +518,9 @@ void experiment_2_1(const string &db_path, const string &output_dir) {
 	// Note: The actual morsel size tracking would require TaskScheduler to log this information
 	// For now, we export task metrics which can be post-processed
 	cout << "Task metrics exported to: " << task_metrics_file << "\n";
+#else
+	cout << "Performance logger not available in this version. Skipping detailed metrics.\n";
+#endif
 
 	csv.close();
 	cout << "Experiment 2.1 completed. Results saved to exp2_1_results.csv\n";
