@@ -52,16 +52,14 @@ fi
 
 # Check build status
 echo -e "${GREEN}🔨 Build Status:${NC}"
-for version in native stage2 stage3 final; do
-    BUILD_PATH="${WORK_DIR}/builds/${version}"
-    if [ -f "${BUILD_PATH}/duckdb" ] && [ -f "${BUILD_PATH}/test/api/comprehensive_experiment_runner" ]; then
-        echo -e "  ${GREEN}✓${NC} ${version}: Built"
-    elif [ -d "${BUILD_PATH}" ]; then
-        echo -e "  ${YELLOW}⚠${NC} ${version}: Building..."
-    else
-        echo -e "  ${RED}✗${NC} ${version}: Not started"
-    fi
-done
+BUILD_PATH="${WORK_DIR}/build"
+if [ -f "${BUILD_PATH}/duckdb" ] && [ -f "${BUILD_PATH}/test/api/comprehensive_experiment_runner" ]; then
+    echo -e "  ${GREEN}✓${NC} DuckDB and experiment runner built"
+elif [ -d "${BUILD_PATH}" ]; then
+    echo -e "  ${YELLOW}⚠${NC} Building..."
+else
+    echo -e "  ${RED}✗${NC} Not started"
+fi
 echo ""
 
 # Check TPC-H database
@@ -77,20 +75,21 @@ echo ""
 
 # Check experiment results
 echo -e "${GREEN}📈 Experiment Results:${NC}"
-if [ -d "$RESULTS_DIR" ]; then
-    for version in native stage2 stage3 final; do
-        RESULT_PATH="${RESULTS_DIR}/${version}"
-        if [ -d "$RESULT_PATH" ]; then
-            CSV_COUNT=$(find "$RESULT_PATH" -name "*.csv" -type f 2>/dev/null | wc -l)
-            if [ "$CSV_COUNT" -gt 0 ]; then
-                echo -e "  ${GREEN}✓${NC} ${version}: ${CSV_COUNT}/11 experiments completed"
-            else
-                echo -e "  ${YELLOW}⚠${NC} ${version}: Running..."
+RESULT_PATH="${WORK_DIR}/experiment_results_final"
+if [ -d "$RESULT_PATH" ]; then
+    CSV_COUNT=$(find "$RESULT_PATH" -name "*.csv" -type f 2>/dev/null | wc -l)
+    if [ "$CSV_COUNT" -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} ${CSV_COUNT}/11 experiments completed"
+        # List completed experiments
+        for csv in "$RESULT_PATH"/*.csv; do
+            if [ -f "$csv" ]; then
+                FILENAME=$(basename "$csv")
+                echo -e "    - $FILENAME"
             fi
-        else
-            echo -e "  ${RED}✗${NC} ${version}: Not started"
-        fi
-    done
+        done
+    else
+        echo -e "  ${YELLOW}⚠${NC} Running..."
+    fi
 else
     echo -e "  ${RED}✗${NC} No results yet"
 fi
